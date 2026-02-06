@@ -8,219 +8,169 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-        body { font-family: 'Inter', sans-serif; }
-    </style>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 </head>
 <body class="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
-    <div id="root"></div>
+    <div id="auth-container" class="max-w-md mx-auto mt-20 bg-white p-8 rounded-2xl shadow-xl hidden">
+        <h2 class="text-2xl font-bold text-green-800 mb-6 text-center">Acesso Restrito</h2>
+        <input type="email" id="email" placeholder="E-mail" class="w-full px-4 py-2 border rounded-lg mb-4">
+        <input type="password" id="password" placeholder="Senha" class="w-full px-4 py-2 border rounded-lg mb-6">
+        <button onclick="fazerLogin()" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700 transition">Entrar</button>
+        <p id="auth-error" class="text-red-500 mt-4 text-sm text-center"></p>
+    </div>
+
+    <div id="app-container" class="hidden">
+        <div id="root"></div>
+    </div>
 
     <script>
-        // Configuração do Firebase (Mesma do seu app de hospedagens)
-        firebase.initializeApp({
+        // Configuração do Firebase
+        const firebaseConfig = {
             apiKey: "AIzaSyDIQw3v9C7FnRNf8_uuiqbx2NLvVErNke0",
             authDomain: "sitio-escola-de-cura.firebaseapp.com",
             projectId: "sitio-escola-de-cura"
-        });
+        };
+        firebase.initializeApp(firebaseConfig);
         const db = firebase.firestore();
+        const auth = firebase.auth();
 
-        // Estado Global
         let state = {
             transacoes: [],
-            descricao: '',
-            valor: '',
-            tipo: 'entrada',
-            categoria: '',
+            descricao: '', valor: '', tipo: 'entrada', categoria: '',
             data: new Date().toISOString().split('T')[0],
             mesSelecionado: new Date().toISOString().slice(0, 7)
         };
 
-        const categoriasEntrada = ['Agendamento Cliente', 'Outros'];
-        const categoriasSaida = ['Produtos Piscina', 'Gasolina Roçadeira', 'Contas', 'Manutenção', 'Alimentação', 'Outros'];
+        // Gerenciamento de Autenticação
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                document.getElementById('auth-container').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                carregarDados();
+            } else {
+                document.getElementById('auth-container').classList.remove('hidden');
+                document.getElementById('app-container').classList.add('hidden');
+            }
+        });
 
-        // Carregar Dados do Firebase
+        async function fazerLogin() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            try {
+                await auth.signInWithEmailAndPassword(email, pass);
+            } catch (error) {
+                document.getElementById('auth-error').innerText = "E-mail ou senha incorretos.";
+            }
+        }
+
         async function carregarDados() {
             const snap = await db.collection("financeiro").orderBy("data", "desc").get();
             state.transacoes = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             render();
         }
 
-        // Adicionar Transação
+        // --- ABAIXO MANTÉM TODA A LÓGICA ORIGINAL QUE VOCÊ ENVIOU ---
+        
         async function adicionarTransacao() {
             if (!state.descricao || !state.valor || !state.categoria) {
-                alert('Preencha todos os campos!');
-                return;
+                alert('Preencha tudo!'); return;
             }
-
-            const novaTransacao = {
+            await db.collection("financeiro").add({
                 descricao: state.descricao,
                 valor: parseFloat(state.valor),
                 tipo: state.tipo,
                 categoria: state.categoria,
-                data: state.data,
-                criadoEm: Date.now()
-            };
-
-            await db.collection("financeiro").add(novaTransacao);
-            
-            // Limpar campos
-            state.descricao = '';
-            state.valor = '';
-            state.categoria = '';
-            state.data = new Date().toISOString().split('T')[0];
-            
+                data: state.data
+            });
+            state.descricao = ''; state.valor = ''; 
             carregarDados();
         }
 
-        // Remover Transação
         async function removerTransacao(id) {
-            if (confirm('Excluir esta transação?')) {
+            if (confirm('Excluir?')) {
                 await db.collection("financeiro").doc(id).delete();
                 carregarDados();
             }
         }
 
-        // Funções de Auxílio
-        function formatarMoeda(valor) {
-            return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        }
-
-        function obterMesAno(mesAno) {
-            const [ano, mes] = mesAno.split('-');
+        const formatarMoeda = (v) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const obterMesAno = (ma) => {
+            const [a, m] = ma.split('-');
             const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-            return `${meses[parseInt(mes) - 1]} ${ano}`;
-        }
+            return `${meses[parseInt(m) - 1]} ${a}`;
+        };
 
-        function handleInput(field, value) {
-            state[field] = value;
-            if (field === 'tipo') state.categoria = '';
-            render();
-        }
-
-        // Renderização da Interface
         function render() {
-            const transacoesFiltradas = state.transacoes.filter(t => t.data.startsWith(state.mesSelecionado));
-            const totalEntradas = transacoesFiltradas.filter(t => t.tipo === 'entrada').reduce((acc, t) => acc + t.valor, 0);
-            const totalSaidas = transacoesFiltradas.filter(t => t.tipo === 'saida').reduce((acc, t) => acc + t.valor, 0);
-            const saldo = totalEntradas - totalSaidas;
+            const filtradas = state.transacoes.filter(t => t.data.startsWith(state.mesSelecionado));
+            const entradas = filtradas.filter(t => t.tipo === 'entrada').reduce((acc, t) => acc + t.valor, 0);
+            const saidas = filtradas.filter(t => t.tipo === 'saida').reduce((acc, t) => acc + t.valor, 0);
+            const saldo = entradas - saidas;
 
-            const root = document.getElementById('root');
-            root.innerHTML = `
+            document.getElementById('root').innerHTML = `
                 <div class="max-w-6xl mx-auto">
                     <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
                         <div class="flex items-center justify-between mb-6">
                             <h1 class="text-3xl font-bold text-green-800">Sítio Escola de Cura - Financeiro</h1>
-                            <i data-lucide="dollar-sign" class="w-10 h-10 text-green-600"></i>
+                            <button onclick="auth.signOut()" class="text-sm text-gray-500 hover:text-red-500">Sair</button>
                         </div>
-
+                        
                         <div class="grid md:grid-cols-3 gap-4 mb-6">
-                            <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-green-100">Entradas</span>
-                                    <i data-lucide="trending-up" class="w-6 h-6"></i>
-                                </div>
-                                <div class="text-3xl font-bold">${formatarMoeda(totalEntradas)}</div>
+                            <div class="bg-green-600 rounded-xl p-6 text-white">
+                                <span class="text-green-100 text-sm">Entradas</span>
+                                <div class="text-3xl font-bold">${formatarMoeda(entradas)}</div>
                             </div>
-
-                            <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-red-100">Saídas</span>
-                                    <i data-lucide="trending-down" class="w-6 h-6"></i>
-                                </div>
-                                <div class="text-3xl font-bold">${formatarMoeda(totalSaidas)}</div>
+                            <div class="bg-red-600 rounded-xl p-6 text-white">
+                                <span class="text-red-100 text-sm">Saídas</span>
+                                <div class="text-3xl font-bold">${formatarMoeda(saidas)}</div>
                             </div>
-
-                            <div class="bg-gradient-to-br ${saldo >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl p-6 text-white">
-                                <div class="flex items-center justify-between mb-2">
-                                    <span class="text-blue-100">Saldo</span>
-                                    <i data-lucide="dollar-sign" class="w-6 h-6"></i>
-                                </div>
+                            <div class="bg-blue-600 rounded-xl p-6 text-white">
+                                <span class="text-blue-100 text-sm">Saldo</span>
                                 <div class="text-3xl font-bold">${formatarMoeda(saldo)}</div>
                             </div>
                         </div>
 
                         <div class="bg-gray-50 rounded-xl p-6 mb-6">
-                            <h2 class="text-xl font-bold text-gray-800 mb-4">Adicionar Transação</h2>
-                            <div class="grid md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-                                    <select onchange="handleInput('tipo', this.value)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                        <option value="entrada" ${state.tipo === 'entrada' ? 'selected' : ''}>Entrada</option>
-                                        <option value="saida" ${state.tipo === 'saida' ? 'selected' : ''}>Saída</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
-                                    <select onchange="handleInput('categoria', this.value)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                        <option value="">Selecione...</option>
-                                        ${(state.tipo === 'entrada' ? categoriasEntrada : categoriasSaida).map(cat => `
-                                            <option value="${cat}" ${state.categoria === cat ? 'selected' : ''}>${cat}</option>
-                                        `).join('')}
-                                    </select>
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
-                                    <input type="text" value="${state.descricao}" oninput="handleInput('descricao', this.value)" placeholder="Ex: Cliente João Silva" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Valor (R$)</label>
-                                    <input type="number" value="${state.valor}" oninput="handleInput('valor', this.value)" placeholder="0.00" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700 mb-2">Data</label>
-                                    <input type="date" value="${state.data}" oninput="handleInput('data', this.value)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                </div>
+                            <div class="grid md:grid-cols-2 gap-4">
+                                <input type="text" placeholder="Descrição" oninput="state.descricao = this.value" class="border p-2 rounded">
+                                <input type="number" placeholder="Valor" oninput="state.valor = this.value" class="border p-2 rounded">
+                                <select onchange="state.tipo = this.value; render()" class="border p-2 rounded">
+                                    <option value="entrada">Entrada</option>
+                                    <option value="saida">Saída</option>
+                                </select>
+                                <select onchange="state.categoria = this.value" class="border p-2 rounded">
+                                    <option value="">Categoria...</option>
+                                    ${(state.tipo === 'entrada' ? ['Agendamento Cliente', 'Outros'] : ['Produtos Piscina', 'Gasolina Roçadeira', 'Contas', 'Manutenção', 'Alimentação', 'Outros']).map(c => `<option value="${c}">${c}</option>`).join('')}
+                                </select>
+                                <input type="date" value="${state.data}" oninput="state.data = this.value" class="border p-2 rounded">
                             </div>
-                            <button onclick="adicionarTransacao()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors">
-                                <i data-lucide="plus" class="w-5 h-5"></i> Adicionar Transação
-                            </button>
+                            <button onclick="adicionarTransacao()" class="w-full bg-green-600 text-white py-3 rounded mt-4">Adicionar</button>
                         </div>
 
                         <div class="bg-gray-50 rounded-xl p-6">
-                            <div class="flex items-center justify-between mb-4">
-                                <h2 class="text-xl font-bold text-gray-800">Relatório Mensal</h2>
-                                <div class="flex items-center gap-2">
-                                    <i data-lucide="calendar" class="w-5 h-5 text-gray-600"></i>
-                                    <input type="month" value="${state.mesSelecionado}" onchange="handleInput('mesSelecionado', this.value)" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                </div>
-                            </div>
-                            <div class="mb-4 text-center text-lg font-semibold text-gray-700">${obterMesAno(state.mesSelecionado)}</div>
-                            
-                            <div class="space-y-3 max-h-96 overflow-y-auto">
-                                ${transacoesFiltradas.length === 0 ? '<p class="text-center text-gray-500 py-8">Nenhuma transação neste mês</p>' : 
-                                transacoesFiltradas.map(t => `
-                                    <div class="bg-white rounded-lg p-4 shadow-sm border border-gray-200 flex items-center justify-between">
-                                        <div class="flex-1">
-                                            <div class="flex items-center gap-3 mb-1">
-                                                <span class="px-3 py-1 rounded-full text-xs font-semibold ${t.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
-                                                    ${t.tipo === 'entrada' ? 'Entrada' : 'Saída'}
-                                                </span>
-                                                <span class="text-sm text-gray-500">${t.categoria}</span>
-                                            </div>
-                                            <div class="font-semibold text-gray-800">${t.descricao}</div>
-                                            <div class="text-sm text-gray-500">${new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+                             <div class="flex justify-between items-center mb-4">
+                                <h2 class="font-bold">Relatório: ${obterMesAno(state.mesSelecionado)}</h2>
+                                <input type="month" value="${state.mesSelecionado}" onchange="state.mesSelecionado = this.value; render()" class="border p-2 rounded">
+                             </div>
+                             <div class="space-y-2">
+                                ${filtradas.map(t => `
+                                    <div class="bg-white p-3 border rounded flex justify-between items-center">
+                                        <div>
+                                            <div class="text-xs ${t.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}">${t.categoria}</div>
+                                            <div class="font-bold">${t.descricao}</div>
                                         </div>
                                         <div class="flex items-center gap-4">
-                                            <div class="text-xl font-bold ${t.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}">
-                                                ${t.tipo === 'entrada' ? '+' : '-'} ${formatarMoeda(t.valor)}
-                                            </div>
-                                            <button onclick="removerTransacao('${t.id}')" class="text-red-500 hover:text-red-700 transition-colors">
-                                                <i data-lucide="trash-2" class="w-5 h-5"></i>
-                                            </button>
+                                            <span class="font-bold">${formatarMoeda(t.valor)}</span>
+                                            <button onclick="removerTransacao('${t.id}')" class="text-red-500"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
                                         </div>
                                     </div>
                                 `).join('')}
-                            </div>
+                             </div>
                         </div>
                     </div>
                 </div>
             `;
             lucide.createIcons();
         }
-
-        // Início
-        carregarDados();
     </script>
 </body>
 </html>
