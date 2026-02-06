@@ -1,266 +1,226 @@
-import React, { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Calendar, Plus, Trash2, Filter } from 'lucide-react';
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sítio Escola de Cura - Financeiro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
+    <div id="root"></div>
 
-export default function SistemaFinanceiro() {
-  const [transacoes, setTransacoes] = useState([]);
-  const [descricao, setDescricao] = useState('');
-  const [valor, setValor] = useState('');
-  const [tipo, setTipo] = useState('entrada');
-  const [categoria, setCategoria] = useState('');
-  const [data, setData] = useState(new Date().toISOString().split('T')[0]);
-  const [mesSelecionado, setMesSelecionado] = useState(new Date().toISOString().slice(0, 7));
+    <script>
+        // Configuração do Firebase (Mesma do seu app de hospedagens)
+        firebase.initializeApp({
+            apiKey: "AIzaSyDIQw3v9C7FnRNf8_uuiqbx2NLvVErNke0",
+            authDomain: "sitio-escola-de-cura.firebaseapp.com",
+            projectId: "sitio-escola-de-cura"
+        });
+        const db = firebase.firestore();
 
-  const categoriasEntrada = ['Agendamento Cliente', 'Outros'];
-  const categoriasSaida = ['Produtos Piscina', 'Gasolina Roçadeira', 'Contas', 'Manutenção', 'Alimentação', 'Outros'];
+        // Estado Global
+        let state = {
+            transacoes: [],
+            descricao: '',
+            valor: '',
+            tipo: 'entrada',
+            categoria: '',
+            data: new Date().toISOString().split('T')[0],
+            mesSelecionado: new Date().toISOString().slice(0, 7)
+        };
 
-  useEffect(() => {
-    carregarDados();
-  }, []);
+        const categoriasEntrada = ['Agendamento Cliente', 'Outros'];
+        const categoriasSaida = ['Produtos Piscina', 'Gasolina Roçadeira', 'Contas', 'Manutenção', 'Alimentação', 'Outros'];
 
-  const carregarDados = async () => {
-    try {
-      const result = await window.storage.get('transacoes-sitio');
-      if (result) {
-        setTransacoes(JSON.parse(result.value));
-      }
-    } catch (error) {
-      console.log('Nenhum dado anterior encontrado');
-    }
-  };
+        // Carregar Dados do Firebase
+        async function carregarDados() {
+            const snap = await db.collection("financeiro").orderBy("data", "desc").get();
+            state.transacoes = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            render();
+        }
 
-  const salvarDados = async (novasTransacoes) => {
-    try {
-      await window.storage.set('transacoes-sitio', JSON.stringify(novasTransacoes));
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
-    }
-  };
+        // Adicionar Transação
+        async function adicionarTransacao() {
+            if (!state.descricao || !state.valor || !state.categoria) {
+                alert('Preencha todos os campos!');
+                return;
+            }
 
-  const adicionarTransacao = () => {
-    if (!descricao || !valor || !categoria) {
-      alert('Preencha todos os campos!');
-      return;
-    }
+            const novaTransacao = {
+                descricao: state.descricao,
+                valor: parseFloat(state.valor),
+                tipo: state.tipo,
+                categoria: state.categoria,
+                data: state.data,
+                criadoEm: Date.now()
+            };
 
-    const novaTransacao = {
-      id: Date.now(),
-      descricao,
-      valor: parseFloat(valor),
-      tipo,
-      categoria,
-      data
-    };
-
-    const novasTransacoes = [...transacoes, novaTransacao];
-    setTransacoes(novasTransacoes);
-    salvarDados(novasTransacoes);
-
-    setDescricao('');
-    setValor('');
-    setCategoria('');
-    setData(new Date().toISOString().split('T')[0]);
-  };
-
-  const removerTransacao = (id) => {
-    const novasTransacoes = transacoes.filter(t => t.id !== id);
-    setTransacoes(novasTransacoes);
-    salvarDados(novasTransacoes);
-  };
-
-  const transacoesFiltradas = transacoes.filter(t => 
-    t.data.startsWith(mesSelecionado)
-  );
-
-  const totalEntradas = transacoesFiltradas
-    .filter(t => t.tipo === 'entrada')
-    .reduce((acc, t) => acc + t.valor, 0);
-
-  const totalSaidas = transacoesFiltradas
-    .filter(t => t.tipo === 'saida')
-    .reduce((acc, t) => acc + t.valor, 0);
-
-  const saldo = totalEntradas - totalSaidas;
-
-  const formatarMoeda = (valor) => {
-    return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  };
-
-  const obterMesAno = (mesAno) => {
-    const [ano, mes] = mesAno.split('-');
-    const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 
-                   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-    return `${meses[parseInt(mes) - 1]} ${ano}`;
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 p-4">
-      <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex items-center justify-between mb-6">
-            <h1 className="text-3xl font-bold text-green-800">
-              Sítio Escola de Cura - Financeiro
-            </h1>
-            <DollarSign className="w-10 h-10 text-green-600" />
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-4 mb-6">
-            <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-green-100">Entradas</span>
-                <TrendingUp className="w-6 h-6" />
-              </div>
-              <div className="text-3xl font-bold">{formatarMoeda(totalEntradas)}</div>
-            </div>
-
-            <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-red-100">Saídas</span>
-                <TrendingDown className="w-6 h-6" />
-              </div>
-              <div className="text-3xl font-bold">{formatarMoeda(totalSaidas)}</div>
-            </div>
-
-            <div className={`bg-gradient-to-br ${saldo >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl p-6 text-white`}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-blue-100">Saldo</span>
-                <DollarSign className="w-6 h-6" />
-              </div>
-              <div className="text-3xl font-bold">{formatarMoeda(saldo)}</div>
-            </div>
-          </div>
-
-          <div className="bg-gray-50 rounded-xl p-6 mb-6">
-            <h2 className="text-xl font-bold text-gray-800 mb-4">Adicionar Transação</h2>
+            await db.collection("financeiro").add(novaTransacao);
             
-            <div className="grid md:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
-                <select 
-                  value={tipo}
-                  onChange={(e) => {
-                    setTipo(e.target.value);
-                    setCategoria('');
-                  }}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="entrada">Entrada</option>
-                  <option value="saida">Saída</option>
-                </select>
-              </div>
+            // Limpar campos
+            state.descricao = '';
+            state.valor = '';
+            state.categoria = '';
+            state.data = new Date().toISOString().split('T')[0];
+            
+            carregarDados();
+        }
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
-                <select 
-                  value={categoria}
-                  onChange={(e) => setCategoria(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                >
-                  <option value="">Selecione...</option>
-                  {(tipo === 'entrada' ? categoriasEntrada : categoriasSaida).map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
+        // Remover Transação
+        async function removerTransacao(id) {
+            if (confirm('Excluir esta transação?')) {
+                await db.collection("financeiro").doc(id).delete();
+                carregarDados();
+            }
+        }
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
-                <input
-                  type="text"
-                  value={descricao}
-                  onChange={(e) => setDescricao(e.target.value)}
-                  placeholder="Ex: Cliente João Silva"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
+        // Funções de Auxílio
+        function formatarMoeda(valor) {
+            return valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Valor (R$)</label>
-                <input
-                  type="number"
-                  value={valor}
-                  onChange={(e) => setValor(e.target.value)}
-                  placeholder="0.00"
-                  step="0.01"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
+        function obterMesAno(mesAno) {
+            const [ano, mes] = mesAno.split('-');
+            const meses = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+            return `${meses[parseInt(mes) - 1]} ${ano}`;
+        }
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Data</label>
-                <input
-                  type="date"
-                  value={data}
-                  onChange={(e) => setData(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-            </div>
+        function handleInput(field, value) {
+            state[field] = value;
+            if (field === 'tipo') state.categoria = '';
+            render();
+        }
 
-            <button
-              onClick={adicionarTransacao}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors"
-            >
-              <Plus className="w-5 h-5" />
-              Adicionar Transação
-            </button>
-          </div>
+        // Renderização da Interface
+        function render() {
+            const transacoesFiltradas = state.transacoes.filter(t => t.data.startsWith(state.mesSelecionado));
+            const totalEntradas = transacoesFiltradas.filter(t => t.tipo === 'entrada').reduce((acc, t) => acc + t.valor, 0);
+            const totalSaidas = transacoesFiltradas.filter(t => t.tipo === 'saida').reduce((acc, t) => acc + t.valor, 0);
+            const saldo = totalEntradas - totalSaidas;
 
-          <div className="bg-gray-50 rounded-xl p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-800">Relatório Mensal</h2>
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-gray-600" />
-                <input
-                  type="month"
-                  value={mesSelecionado}
-                  onChange={(e) => setMesSelecionado(e.target.value)}
-                  className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-              </div>
-            </div>
+            const root = document.getElementById('root');
+            root.innerHTML = `
+                <div class="max-w-6xl mx-auto">
+                    <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <h1 class="text-3xl font-bold text-green-800">Sítio Escola de Cura - Financeiro</h1>
+                            <i data-lucide="dollar-sign" class="w-10 h-10 text-green-600"></i>
+                        </div>
 
-            <div className="mb-4 text-center text-lg font-semibold text-gray-700">
-              {obterMesAno(mesSelecionado)}
-            </div>
+                        <div class="grid md:grid-cols-3 gap-4 mb-6">
+                            <div class="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-green-100">Entradas</span>
+                                    <i data-lucide="trending-up" class="w-6 h-6"></i>
+                                </div>
+                                <div class="text-3xl font-bold">${formatarMoeda(totalEntradas)}</div>
+                            </div>
 
-            {transacoesFiltradas.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">Nenhuma transação neste mês</p>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {transacoesFiltradas.sort((a, b) => new Date(b.data) - new Date(a.data)).map(t => (
-                  <div key={t.id} className="bg-white rounded-lg p-4 shadow-sm border border-gray-200 flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-1">
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                          t.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {t.tipo === 'entrada' ? 'Entrada' : 'Saída'}
-                        </span>
-                        <span className="text-sm text-gray-500">{t.categoria}</span>
-                      </div>
-                      <div className="font-semibold text-gray-800">{t.descricao}</div>
-                      <div className="text-sm text-gray-500">
-                        {new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}
-                      </div>
+                            <div class="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-red-100">Saídas</span>
+                                    <i data-lucide="trending-down" class="w-6 h-6"></i>
+                                </div>
+                                <div class="text-3xl font-bold">${formatarMoeda(totalSaidas)}</div>
+                            </div>
+
+                            <div class="bg-gradient-to-br ${saldo >= 0 ? 'from-blue-500 to-blue-600' : 'from-orange-500 to-orange-600'} rounded-xl p-6 text-white">
+                                <div class="flex items-center justify-between mb-2">
+                                    <span class="text-blue-100">Saldo</span>
+                                    <i data-lucide="dollar-sign" class="w-6 h-6"></i>
+                                </div>
+                                <div class="text-3xl font-bold">${formatarMoeda(saldo)}</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 rounded-xl p-6 mb-6">
+                            <h2 class="text-xl font-bold text-gray-800 mb-4">Adicionar Transação</h2>
+                            <div class="grid md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                                    <select onchange="handleInput('tipo', this.value)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                        <option value="entrada" ${state.tipo === 'entrada' ? 'selected' : ''}>Entrada</option>
+                                        <option value="saida" ${state.tipo === 'saida' ? 'selected' : ''}>Saída</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Categoria</label>
+                                    <select onchange="handleInput('categoria', this.value)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                        <option value="">Selecione...</option>
+                                        ${(state.tipo === 'entrada' ? categoriasEntrada : categoriasSaida).map(cat => `
+                                            <option value="${cat}" ${state.categoria === cat ? 'selected' : ''}>${cat}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Descrição</label>
+                                    <input type="text" value="${state.descricao}" oninput="handleInput('descricao', this.value)" placeholder="Ex: Cliente João Silva" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Valor (R$)</label>
+                                    <input type="number" value="${state.valor}" oninput="handleInput('valor', this.value)" placeholder="0.00" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Data</label>
+                                    <input type="date" value="${state.data}" oninput="handleInput('data', this.value)" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                </div>
+                            </div>
+                            <button onclick="adicionarTransacao()" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                <i data-lucide="plus" class="w-5 h-5"></i> Adicionar Transação
+                            </button>
+                        </div>
+
+                        <div class="bg-gray-50 rounded-xl p-6">
+                            <div class="flex items-center justify-between mb-4">
+                                <h2 class="text-xl font-bold text-gray-800">Relatório Mensal</h2>
+                                <div class="flex items-center gap-2">
+                                    <i data-lucide="calendar" class="w-5 h-5 text-gray-600"></i>
+                                    <input type="month" value="${state.mesSelecionado}" onchange="handleInput('mesSelecionado', this.value)" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
+                                </div>
+                            </div>
+                            <div class="mb-4 text-center text-lg font-semibold text-gray-700">${obterMesAno(state.mesSelecionado)}</div>
+                            
+                            <div class="space-y-3 max-h-96 overflow-y-auto">
+                                ${transacoesFiltradas.length === 0 ? '<p class="text-center text-gray-500 py-8">Nenhuma transação neste mês</p>' : 
+                                transacoesFiltradas.map(t => `
+                                    <div class="bg-white rounded-lg p-4 shadow-sm border border-gray-200 flex items-center justify-between">
+                                        <div class="flex-1">
+                                            <div class="flex items-center gap-3 mb-1">
+                                                <span class="px-3 py-1 rounded-full text-xs font-semibold ${t.tipo === 'entrada' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}">
+                                                    ${t.tipo === 'entrada' ? 'Entrada' : 'Saída'}
+                                                </span>
+                                                <span class="text-sm text-gray-500">${t.categoria}</span>
+                                            </div>
+                                            <div class="font-semibold text-gray-800">${t.descricao}</div>
+                                            <div class="text-sm text-gray-500">${new Date(t.data + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+                                        </div>
+                                        <div class="flex items-center gap-4">
+                                            <div class="text-xl font-bold ${t.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}">
+                                                ${t.tipo === 'entrada' ? '+' : '-'} ${formatarMoeda(t.valor)}
+                                            </div>
+                                            <button onclick="removerTransacao('${t.id}')" class="text-red-500 hover:text-red-700 transition-colors">
+                                                <i data-lucide="trash-2" class="w-5 h-5"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className={`text-xl font-bold ${t.tipo === 'entrada' ? 'text-green-600' : 'text-red-600'}`}>
-                        {t.tipo === 'entrada' ? '+' : '-'} {formatarMoeda(t.valor)}
-                      </div>
-                      <button
-                        onClick={() => removerTransacao(t.id)}
-                        className="text-red-500 hover:text-red-700 transition-colors"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // Início
+        carregarDados();
+    </script>
+</body>
+</html>
